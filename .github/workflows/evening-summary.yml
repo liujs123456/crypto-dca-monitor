@@ -1,0 +1,20 @@
+name: Evening Portfolio Summary
+
+on:
+  schedule:
+    # 20:03 PT = 03:03 UTC next day (PDT). Switch to 04:03 UTC when DST ends.
+    - cron: '3 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run evening summary
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          OKX_API_KEY: ${{ secrets.OKX_API_KEY }}
+          OKX_SECRET: ${{ secrets.OKX_SECRET }}
+          OKX_PASSPHRASE: ${{ secrets.OKX_PASSPHRASE }}
+        run: bash scripts/evening_summary.sh

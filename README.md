@@ -1,0 +1,148 @@
+# DCA Sentinel
+
+A cloud-native, $0/month cryptocurrency portfolio monitor that runs 24/7 on GitHub Actions. Push notifications for dip-buying ladder triggers, LLM-summarized morning news, and end-of-day account snapshots — all delivered to your phone via [ntfy.sh](https://ntfy.sh).
+
+Built for disciplined dollar-cost-averaging investors who want signal, not noise — and who would rather have their phone interrupt them at the right moment than refresh CoinMarketCap fifty times a day.
+
+> Strategy isn't included; you bring your own. This is execution infrastructure.
+
+## Why this exists
+
+Every retail crypto investor eventually faces the same problem: *checking too often is bad for your strategy and your sleep, but never checking means missing the moments that matter*. Existing solutions are either:
+- Mobile exchange apps that incentivize frequent checking and cross-selling
+- Paid signal services with opaque algorithms and recurring fees
+- Self-hosted scripts that require always-on hardware
+
+This is the third path: a stateless, idempotent, cron-driven monitor that **only interrupts you when something matters**, runs entirely on free-tier GitHub Actions, and costs nothing beyond the API keys you already have.
+
+## Features
+
+| Workflow | Frequency | What it does |
+|----------|-----------|--------------|
+| `btc-monitor` | Every 2h | Multi-tier dip-buying ladder. Silent unless price crosses a threshold; uses past notifications as state (no DB needed). |
+| `morning-briefing` | Daily 7:03 AM | Aggregates 30+ headlines from CNBC, CoinDesk, Yahoo Finance, Cointelegraph; LLM-summarizes top 4-5 most market-impactful items in your preferred language. |
+| `evening-summary` | Daily 8:03 PM | HMAC-SHA256 signed OKX API call: total assets, holdings, today's DCA fills, unrealized P&L, Earn interest. |
+
+All push to a single ntfy topic — your phone hears one channel, you set DND rules per priority level.
+
+## Architecture
+
+```
+                  ┌──────────────────────┐
+                  │  GitHub Actions Cron │
+                  └──────────┬───────────┘
+                             │
+       ┌─────────────────────┼─────────────────────┐
+       │                     │                     │
+       ▼                     ▼                     ▼
+┌─────────────┐      ┌──────────────┐      ┌──────────────┐
+│ btc-monitor │      │  morning-    │      │  evening-    │
+│             │      │  briefing    │      │  summary     │
+└──────┬──────┘      └──────┬───────┘      └──────┬───────┘
+       │                    │                     │
+       ▼                    ▼                     ▼
+┌─────────────┐      ┌──────────────┐      ┌──────────────┐
+│  Coinbase   │      │ RSS feeds +  │      │  OKX API     │
+│  /CoinGecko │      │ Groq LLM     │      │  (HMAC v5)   │
+└──────┬──────┘      └──────┬───────┘      └──────┬───────┘
+       │                    │                     │
+       └─────────────┬──────┴─────────────────────┘
+                     ▼
+              ┌─────────────┐
+              │   ntfy.sh   │
+              └──────┬──────┘
+                     ▼
+                  📱 Phone
+```
+
+Three workflows are completely independent — they don't share state in code. The dip-ladder monitor reads its previous state from past ntfy notifications it published (idempotent, no database). New environments work out of the box without seeding.
+
+## Quick start
+
+```bash
+# 1) Fork this repo, then clone your fork
+git clone git@github.com:<your-username>/dca-sentinel.git
+cd dca-sentinel
+
+# 2) Pick an ntfy topic name (anything URL-safe — pick something hard to guess)
+TOPIC="my-dca-$(openssl rand -hex 6)"
+
+# 3) Subscribe your phone: install ntfy iOS/Android app → add subscription "$TOPIC"
+
+# 4) Set GitHub Secrets (see .env.example for all required keys)
+gh secret set NTFY_TOPIC --body "$TOPIC"
+gh secret set GROQ_API_KEY --body "gsk_xxxxx"        # https://console.groq.com (free tier)
+gh secret set OKX_API_KEY --body "..."               # OKX → API → create READ-ONLY key
+gh secret set OKX_SECRET --body "..."
+gh secret set OKX_PASSPHRASE --body "..."
+
+# 5) (Optional) Set the dip-ladder reference price
+gh variable set BTC_REF_PRICE --body "80000"        # rolling 30-day high
+
+# 6) Trigger workflows manually to verify
+gh workflow run btc-monitor.yml
+gh workflow run morning-briefing.yml
+gh workflow run evening-summary.yml
+```
+
+## Strategy: how the dip-ladder works
+
+Inspired by classic value-averaging plus capitulation-buying:
+
+```
+Reference price (e.g. 30-day rolling high)
+    ↓
+T1: -10% from ref  →  watch / first dip
+T2: -15% from ref  →  noticeable correction
+T3: -22% from ref  →  deep correction
+T4: -32% from ref  →  capitulation
+```
+
+Each tier publishes a notification with escalating priority. The monitor uses past notifications as state — if T1 just fired, T2 won't fire again until BTC recovers above ref × 0.95, then drops again. No double-firing on noisy candles.
+
+You decide tier sizes off-platform. This system only tells you *when*, never *how much*.
+
+## Why these specific choices
+
+| Decision | Why |
+|----------|-----|
+| **GitHub Actions cron** | Free; 2,000 min/mo more than enough; no server to maintain |
+| **ntfy.sh (vs SMS/Discord/Slack)** | Free, self-hostable, no account needed, native iOS/Android apps with priority-based DND |
+| **Groq llama-3.1-8b-instant** | Free tier, sub-second inference, plenty fast for daily news distillation |
+| **State stored in ntfy itself** | No external DB, no Gist token rotation, no leakage if repo goes public |
+| **Bash + Python stdlib only** | Zero external deps, runs on any Linux runner, easy to audit |
+| **Coinbase + CoinGecko fallback** | Both have generous public APIs; redundancy avoids missed alerts |
+
+## Costs
+
+Truly $0/month if you stay within free tiers:
+- GitHub Actions: 2,000 min/mo for free accounts (this uses ~30 min/mo)
+- Groq: 30 req/min, 14,400 req/day on free tier (this uses 1 req/day)
+- ntfy.sh: free (publish + subscribe to public topics)
+- OKX API: free for read-only queries
+- Coinbase price API: free for unauthenticated quotes
+
+## Daylight Saving Time
+
+GitHub Actions cron uses UTC. Adjust on DST transitions:
+- **PDT (March – November)**: morning `3 14 * * *`, evening `3 3 * * *`
+- **PST (November – March)**: morning `3 15 * * *`, evening `3 4 * * *`
+
+## What's deliberately not included
+
+- No trade execution. By design. This system observes; you decide.
+- No leverage / futures / options. Spot only.
+- No web UI. Notifications are the UI.
+- No email channel. Inboxes are graveyards. Phone push is the only output.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Contributions welcome
+
+Issues and PRs welcome. Particularly interested in:
+- Additional exchange integrations (Coinbase, Kraken, Binance)
+- Configurable tier counts and thresholds via repo variables
+- More language support for the morning briefing
+- Tests
