@@ -1,4 +1,4 @@
-# DCA Sentinel
+# Crypto DCA Monitor
 
 A cloud-native, $0/month cryptocurrency portfolio monitor that runs 24/7 on GitHub Actions. Push notifications for dip-buying ladder triggers, LLM-summarized morning news, and end-of-day account snapshots — all delivered to your phone via [ntfy.sh](https://ntfy.sh).
 
@@ -73,8 +73,8 @@ Three workflows are completely independent — they don't share state in code. T
 
 ```bash
 # 1) Fork this repo, then clone your fork
-git clone git@github.com:<your-username>/dca-sentinel.git
-cd dca-sentinel
+git clone git@github.com:<your-username>/crypto-dca-monitor.git
+cd crypto-dca-monitor
 
 # 2) Pick an ntfy topic name (anything URL-safe — pick something hard to guess)
 TOPIC="my-dca-$(openssl rand -hex 6)"
