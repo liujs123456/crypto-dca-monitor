@@ -25,6 +25,18 @@ This is the third path: a stateless, idempotent, cron-driven monitor that **only
 
 All push to a single ntfy topic — your phone hears one channel, you set DND rules per priority level.
 
+## Why not other tools?
+
+| Tool | Limitation | This project's answer |
+|------|-----------|----------------------|
+| **3Commas / Cryptohopper** | Locked into proprietary platform; subscription fees ($30+/mo); your strategy lives on their servers | Self-hosted code, free tier only, your strategy stays in your repo |
+| **SymBot / freqtrade** | Requires Docker + always-on VPS / Raspberry Pi; ops burden; restart loops | Stateless workflow runs in CI; nothing to maintain; no server to forget about |
+| **binance-dca-bot** (and forks) | Single exchange; basic DCA only; no monitoring or news layer | OKX (extensible to others); dip-ladder + DCA + news + reports in one repo |
+| **Exchange mobile apps** | Designed to maximize engagement; cross-sell leveraged products; tempt you to check every hour | Push-only UX; silent unless something matters; you check exactly when alerted |
+| **Telegram price-alert bots** | Telegram itself is noisy; alerts mix with chat; no priority levels; account binding | ntfy supports per-priority DND; runs alongside iOS Focus; no extra account |
+| **Custom Python script + cron on laptop** | Stops when laptop sleeps or travels; you forget to start it back up | GitHub Actions runs in their datacenter 24/7 regardless of your hardware |
+| **OKX official tools** (e.g. okx/agent-skills) | Trade execution focused; assumes you want an agent making moves | Read-only by design; observation layer for humans-in-the-loop |
+
 ## Architecture
 
 ```
