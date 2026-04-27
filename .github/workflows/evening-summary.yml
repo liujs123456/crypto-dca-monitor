@@ -2,8 +2,9 @@ name: Evening Portfolio Summary
 
 on:
   schedule:
-    # 20:03 PT = 03:03 UTC next day (PDT). Switch to 04:03 UTC when DST ends.
-    - cron: '3 3 * * *'
+    # 20:17 PT = 03:17 UTC next day (PDT). Switch to 04:17 UTC when DST ends.
+    # Avoids minute :03 where GH Actions cron is often skipped due to load spikes.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 jobs:

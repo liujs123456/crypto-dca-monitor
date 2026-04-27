@@ -2,8 +2,9 @@ name: Morning News Briefing
 
 on:
   schedule:
-    # 7:03 AM PDT = 14:03 UTC. Switch to 15:03 UTC when DST ends in November.
-    - cron: '3 14 * * *'
+    # 7:17 AM PDT = 14:17 UTC. Switch to 15:17 UTC when DST ends in November.
+    # Avoids :00/:03/:05 minute marks where GH Actions cron is often skipped due to global load spikes.
+    - cron: '17 14 * * *'
   workflow_dispatch:
 
 jobs:
