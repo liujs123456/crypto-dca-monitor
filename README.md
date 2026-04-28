@@ -69,6 +69,21 @@ All push to a single ntfy topic — your phone hears one channel, you set DND ru
 
 Three workflows are completely independent — they don't share state in code. The dip-ladder monitor reads its previous state from past ntfy notifications it published (idempotent, no database). New environments work out of the box without seeding.
 
+## AI Co-pilot Layer (optional)
+
+The cron jobs interrupt you when something matters. Once they do, you often want to **ask back** — *why did T1 fire? what's my actual cost basis? how far to T2?* — and a fixed-format push notification can't answer that.
+
+The [`claude/`](./claude) directory ships an optional conversational layer built on [Claude Code](https://claude.com/claude-code) Skills + MCP:
+
+| Layer | Frequency | Interface |
+|-------|-----------|-----------|
+| Cron workflows (`scripts/`) | Every 2h / daily | Push notification |
+| Claude skills (`claude/`) | On-demand | Natural language |
+
+First skill shipped: [`analyze-position`](./claude/skills/analyze-position/SKILL.md) — ask *"how am I doing?"* / *"看下仓位"* and Claude pulls live OKX state + current ladder tier and gives you a one-screen analysis.
+
+The layer is **independent** of the cron jobs. You can run DCA Sentinel without it; the GitHub Actions don't depend on the skills directory. Everything stays read-only — no skill calls a trade endpoint, ever.
+
 ## Quick start
 
 ```bash
