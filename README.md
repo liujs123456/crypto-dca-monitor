@@ -1,5 +1,9 @@
 # Crypto DCA Monitor
 
+[![tests](https://github.com/liujs123456/crypto-dca-monitor/actions/workflows/test.yml/badge.svg)](https://github.com/liujs123456/crypto-dca-monitor/actions/workflows/test.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+
 A cloud-native, $0/month cryptocurrency portfolio monitor that runs 24/7 on GitHub Actions. Push notifications for dip-buying ladder triggers, LLM-summarized morning news, and end-of-day account snapshots — all delivered to your phone via [ntfy.sh](https://ntfy.sh).
 
 Built for disciplined dollar-cost-averaging investors who want signal, not noise — and who would rather have their phone interrupt them at the right moment than refresh CoinMarketCap fifty times a day.
@@ -162,6 +166,18 @@ GitHub Actions cron uses UTC. Adjust on DST transitions:
 - No web UI. Notifications are the UI.
 - No email channel. Inboxes are graveyards. Phone push is the only output.
 
+## Testing
+
+The Claude co-pilot layer ships with stdlib-only unit tests (no `pytest` / no third-party deps — matches the project's "Bash + Python stdlib" philosophy):
+
+```bash
+python3 -m unittest discover -s claude/skills/analyze-position -p "test_*.py" -v
+```
+
+CI runs the same command on every push to `claude/**` — see [`.github/workflows/test.yml`](.github/workflows/test.yml) and the badge at the top of this README.
+
+The cron workflows (`scripts/`) don't yet have tests — PRs welcome.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
@@ -172,4 +188,5 @@ Issues and PRs welcome. Particularly interested in:
 - Additional exchange integrations (Coinbase, Kraken, Binance)
 - Configurable tier counts and thresholds via repo variables
 - More language support for the morning briefing
-- Tests
+- Tests for the cron scripts (`scripts/btc_monitor.sh`, `scripts/morning_briefing.py`, `scripts/evening_summary.sh`)
+- More skills under `claude/skills/` (e.g. `explain-trigger`, `dca-advisor`)

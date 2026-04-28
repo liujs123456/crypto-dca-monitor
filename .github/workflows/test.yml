@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "claude/**"
+      - ".github/workflows/test.yml"
+  pull_request:
+    paths:
+      - "claude/**"
+      - ".github/workflows/test.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run skill tests
+        run: |
+          set -e
+          ran=0
+          fail=0
+          for dir in claude/skills/*/; do
+            if ls "$dir"test_*.py >/dev/null 2>&1; then
+              echo "::group::Tests in $dir"
+              python3 -m unittest discover -s "$dir" -p "test_*.py" -v || fail=1
+              echo "::endgroup::"
+              ran=1
+            fi
+          done
+          if [ "$ran" = "0" ]; then
+            echo "No test files found under claude/skills/*/test_*.py"
+            exit 1
+          fi
+          exit $fail
