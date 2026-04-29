@@ -1,0 +1,42 @@
+name: Notify on failure via ntfy
+description: Posts a single max-priority ntfy message with a click-through to the failed run. Only fires when a previous step failed (caller controls via if:).
+
+inputs:
+  ntfy-topic:
+    description: ntfy topic (without leading https://ntfy.sh/)
+    required: true
+  title:
+    description: Notification title
+    required: true
+  message:
+    description: Notification body. Defaults to a generic "see the run URL" line.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Push failure notification
+      shell: bash
+      env:
+        NTFY_TOPIC: ${{ inputs.ntfy-topic }}
+        TITLE: ${{ inputs.title }}
+        MESSAGE: ${{ inputs.message }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        BODY="${MESSAGE:-Workflow failed. View ${RUN_URL}}"
+        # JSON publishing API — handles UTF-8/emoji cleanly
+        python3 -c "
+        import json, os, urllib.request
+        payload = {
+            'topic': os.environ['NTFY_TOPIC'],
+            'title': os.environ['TITLE'],
+            'message': os.environ.get('BODY') or f\"Workflow failed. View {os.environ['RUN_URL']}\",
+            'priority': 5,
+            'tags': ['rotating_light'],
+            'click': os.environ['RUN_URL'],
+        }
+        req = urllib.request.Request('https://ntfy.sh/', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as r:
+            print('ntfy status:', r.status)
+        " || echo "[WARN] failure notification itself failed — check ntfy/network"

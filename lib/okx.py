@@ -1,4 +1,9 @@
-"""Lightweight OKX REST helper for read-only endpoints (HMAC-signed)."""
+"""Lightweight OKX REST helper for read-only endpoints (HMAC-signed).
+
+Built-in retry with exponential backoff on transient failures (5xx, timeouts,
+network errors). 429 rate-limit responses are also retried. Auth/permission
+errors (4xx other than 429) are surfaced immediately.
+"""
 from __future__ import annotations
 
 import base64
@@ -6,17 +11,56 @@ import hashlib
 import hmac
 import json
 import os
+import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
 OKX_BASE = "https://www.okx.com"
 
+MAX_ATTEMPTS = 3
+INITIAL_BACKOFF_S = 1.0
+BACKOFF_MULTIPLIER = 3.0  # 1s, 3s, 9s
+RETRYABLE_HTTP = {429, 500, 502, 503, 504}
+
 
 def _ts() -> str:
     now = datetime.now(timezone.utc)
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def _retryable_request(req: urllib.request.Request, what: str) -> dict:
+    """Execute the request with exponential backoff on transient failures."""
+    last_exc: Exception | None = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="ignore")
+            if e.code in RETRYABLE_HTTP and attempt < MAX_ATTEMPTS:
+                backoff = INITIAL_BACKOFF_S * (BACKOFF_MULTIPLIER ** (attempt - 1))
+                print(f"[RETRY] OKX {what} HTTP {e.code} (attempt {attempt}/{MAX_ATTEMPTS}); waiting {backoff}s", file=sys.stderr)
+                time.sleep(backoff)
+                last_exc = e
+                continue
+            print(f"[ERR] OKX {what} HTTP {e.code}: {body[:300]}", file=sys.stderr)
+            raise
+        except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+            if attempt < MAX_ATTEMPTS:
+                backoff = INITIAL_BACKOFF_S * (BACKOFF_MULTIPLIER ** (attempt - 1))
+                print(f"[RETRY] OKX {what} {type(e).__name__}: {e} (attempt {attempt}/{MAX_ATTEMPTS}); waiting {backoff}s", file=sys.stderr)
+                time.sleep(backoff)
+                last_exc = e
+                continue
+            print(f"[ERR] OKX {what} network: {e}", file=sys.stderr)
+            raise
+    # Defensive: should be unreachable since the loop either returns or raises
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("OKX request exhausted retries with no exception")
 
 
 def signed_get(path_and_query: str) -> dict:
@@ -41,13 +85,7 @@ def signed_get(path_and_query: str) -> dict:
         },
         method="GET",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="ignore")
-        print(f"[ERR] OKX HTTP {e.code}: {body[:300]}", file=sys.stderr)
-        raise
+    return _retryable_request(req, f"signed GET {path_and_query[:60]}")
 
 
 def public_get(path_and_query: str) -> dict:
@@ -55,8 +93,7 @@ def public_get(path_and_query: str) -> dict:
         OKX_BASE + path_and_query,
         headers={"User-Agent": "Mozilla/5.0"},
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
+    return _retryable_request(req, f"public GET {path_and_query[:60]}")
 
 
 def account_balance() -> dict[str, dict]:

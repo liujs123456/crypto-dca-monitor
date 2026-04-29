@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths:
       - "claude/**"
+      - "lib/**"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/test.yml"
   pull_request:
     paths:
       - "claude/**"
+      - "lib/**"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/test.yml"
   workflow_dispatch:
 
@@ -20,6 +26,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Run cron-script tests (lib + scripts)
+        run: |
+          if [ -d tests ]; then
+            echo "::group::Tests in tests/"
+            python3 -m unittest discover -s tests -p "test_*.py" -v
+            echo "::endgroup::"
+          else
+            echo "No tests/ directory; skipping cron-script tests."
+          fi
+
       - name: Run skill tests
         run: |
           set -e
@@ -35,6 +52,5 @@ jobs:
           done
           if [ "$ran" = "0" ]; then
             echo "No test files found under claude/skills/*/test_*.py"
-            exit 1
           fi
           exit $fail

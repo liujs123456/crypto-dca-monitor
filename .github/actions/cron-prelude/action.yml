@@ -1,0 +1,33 @@
+name: Cron prelude
+description: Standard checkout + optional DST gate. Sets steps.gate.outputs.skip=true when current PT clock is not within tolerance of the target.
+
+inputs:
+  pt-hour:
+    description: Target PT hour (0-23). Omit to skip DST gating.
+    required: false
+  pt-minute:
+    description: Target PT minute (0-59). Required if pt-hour is set.
+    required: false
+  force:
+    description: When 'true', bypasses the DST gate (so the workflow always runs).
+    required: false
+    default: 'false'
+
+outputs:
+  skip:
+    description: 'true' when the gate decided this run is the wrong DST window
+    value: ${{ steps.gate.outputs.skip }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: DST gate
+      id: gate
+      if: inputs.pt-hour != '' && inputs.force != 'true'
+      shell: bash
+      run: |
+        if python3 -m lib.dst_gate skip-if-not "${{ inputs.pt-hour }}" "${{ inputs.pt-minute }}"; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        fi

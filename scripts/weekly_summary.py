@@ -118,6 +118,7 @@ USDT 现货 {fmt_money(usdt)} | Earn {fmt_money(earn_amt)} (+{fmt_money(earn_int
         body,
         priority="default",
         tags="calendar",
+        thread="weekly-summary",
     )
     print(body)
     return 0 if ok else 1

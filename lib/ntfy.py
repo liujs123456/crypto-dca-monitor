@@ -29,7 +29,14 @@ def push(
     priority: str | int = "default",
     tags: str = "",
     click: str | None = None,
+    thread: str | None = None,
 ) -> bool:
+    """Push a notification to ntfy.
+
+    `thread`, if set, becomes a hidden tag iOS uses for notification grouping —
+    multiple alerts sharing the same thread collapse into one stack on the lock
+    screen instead of cluttering with individual rows.
+    """
     topic = os.environ["NTFY_TOPIC"]
     payload: dict = {
         "topic": topic,
@@ -37,8 +44,13 @@ def push(
         "message": body,
         "priority": _to_int_priority(priority),
     }
-    if tags:
-        payload["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    if thread:
+        # ntfy doesn't have a first-class threadId; tags drive iOS grouping.
+        # A "thread:btc-monitor" prefix tag keeps it greppable + groupable.
+        tag_list.insert(0, f"thread:{thread}")
+    if tag_list:
+        payload["tags"] = tag_list
     if click:
         payload["click"] = click
 

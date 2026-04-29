@@ -70,6 +70,7 @@ def main() -> int:
         f"Tier 触发价随之调整。",
         priority="low",
         tags="gear",
+        thread="ref-update",
     )
     return 0
 

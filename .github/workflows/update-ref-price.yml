@@ -2,14 +2,12 @@ name: Update BTC REF Price (30d high)
 
 on:
   schedule:
-    # Dual schedule for DST: 08:05 UTC = 1:05 PT in PDT, 09:05 UTC = 1:05 PT in PST.
-    # Runs daily before morning briefing.
-    - cron: '5 8 * * *'
-    - cron: '5 9 * * *'
+    - cron: '5 8 * * *'  # 1:05 PT in PDT
+    - cron: '5 9 * * *'  # 1:05 PT in PST
   workflow_dispatch:
     inputs:
       force:
-        description: 'Bypass DST gate (run regardless of PT clock)'
+        description: 'Bypass DST gate'
         type: boolean
         default: false
 
@@ -17,36 +15,24 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: DST gate (skip if PT != 01:05)
-        id: gate
-        if: inputs.force != true
-        run: |
-          if python3 -m lib.dst_gate skip-if-not 1 5; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          fi
+      - id: prelude
+        uses: ./.github/actions/cron-prelude
+        with:
+          pt-hour: '1'
+          pt-minute: '5'
+          force: ${{ inputs.force }}
 
       - name: Update REF
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.prelude.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE }}
-          # PAT with `variables: write` scope. Falls back to GITHUB_TOKEN which
-          # cannot write Variables — so this MUST be set as a repo secret.
+          # PAT with `variables: write` scope — GITHUB_TOKEN cannot write Variables.
           GH_TOKEN: ${{ secrets.GH_PAT_VARS || secrets.GITHUB_TOKEN }}
         run: python3 scripts/update_ref_price.py
 
-      - name: Notify on failure
-        if: failure()
-        env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          curl -s -X POST \
-            -H "Title: 🚨 REF 自动更新失败" \
-            -H "Priority: high" \
-            -H "Tags: warning" \
-            -H "Click: ${RUN_URL}" \
-            -d "Auto REF update failed. 查看 ${RUN_URL}" \
-            "https://ntfy.sh/${NTFY_TOPIC}"
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          ntfy-topic: ${{ secrets.NTFY_TOPIC }}
+          title: "🚨 REF 自动更新失败"

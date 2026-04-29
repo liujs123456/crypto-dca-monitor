@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Evening portfolio summary — OKX read-only API → ntfy push.
 
-Runs daily at 20:17 PT via GitHub Actions. Now includes ladder status (which
-tier is closest, distance from each trigger, armed state).
+Runs daily at 20:17 PT. Includes ladder status (which tier is closest, distance
+to each trigger, armed state) and day-over-day Earn interest delta.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -17,9 +18,26 @@ sys.path.insert(0, str(ROOT))
 
 from lib import ladder, ntfy, okx
 
+DAILY_SNAP_PATH = ROOT / "state" / "daily_snapshots.json"
+KEEP_DAYS = 60  # rolling 2 months of daily snapshots
+
 
 def fmt_money(x: float, decimals: int = 2) -> str:
     return f"${x:,.{decimals}f}"
+
+
+def load_daily_snapshots() -> list[dict]:
+    if not DAILY_SNAP_PATH.exists():
+        return []
+    try:
+        return json.loads(DAILY_SNAP_PATH.read_text())
+    except Exception:
+        return []
+
+
+def save_daily_snapshots(snaps: list[dict]) -> None:
+    DAILY_SNAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DAILY_SNAP_PATH.write_text(json.dumps(snaps[-KEEP_DAYS:], indent=2) + "\n")
 
 
 def main() -> int:
@@ -44,6 +62,16 @@ def main() -> int:
     else:
         dca_line = "今日 DCA: 0 单（请检查 OKX 自动 DCA 是否还在运行）"
 
+    # Day-over-day Earn interest delta
+    daily_snaps = load_daily_snapshots()
+    interest_today = ""
+    if daily_snaps:
+        prev_int = daily_snaps[-1].get("earn_int", 0)
+        delta = earn_int - prev_int
+        if delta > 0:
+            apr = (delta / earn_amt * 365 * 100) if earn_amt > 0 else 0
+            interest_today = f"  今日新增利息: +{fmt_money(delta)} (年化 {apr:.1f}%)"
+
     btc_value = btc_held * btc_price
     total_assets = usdt + btc_value + earn_amt
     upl = btc_held * (btc_price - btc_avg) if btc_avg > 0 else 0
@@ -64,6 +92,10 @@ def main() -> int:
         dist_pct = (btc_price / tier_p - 1) * 100
         distances.append(f"{name}: ${tier_p:,.0f} ({dist_pct:+.1f}%)")
 
+    earn_block = f"USDT Earn: {fmt_money(earn_amt)} (累计利息 +{fmt_money(earn_int)})"
+    if interest_today:
+        earn_block += f"\n{interest_today}"
+
     body = f"""💰 总资产 {fmt_money(total_assets)}
 
 BTC {fmt_money(btc_price, 0)} ({px_24h_pct:+.2f}%)
@@ -71,7 +103,7 @@ BTC {fmt_money(btc_price, 0)} ({px_24h_pct:+.2f}%)
 均价 {fmt_money(btc_avg, 0)} | 浮盈 {fmt_money(upl)} ({upl_pct:+.2f}%)
 
 USDT 现货: {fmt_money(usdt)}
-USDT Earn: {fmt_money(earn_amt)} (累计利息 +{fmt_money(earn_int)})
+{earn_block}
 
 {dca_line}
 
@@ -83,7 +115,20 @@ USDT Earn: {fmt_money(earn_amt)} (累计利息 +{fmt_money(earn_int)})
         body,
         priority="default",
         tags="bar_chart",
+        thread="evening-summary",
     )
+
+    # Append snapshot for tomorrow's delta calculation
+    daily_snaps.append({
+        "ts_utc": datetime.utcnow().isoformat(),
+        "earn_amt": earn_amt,
+        "earn_int": earn_int,
+        "btc_price": btc_price,
+        "btc_held": btc_held,
+        "total_assets": total_assets,
+    })
+    save_daily_snapshots(daily_snaps)
+
     print(body)
     return 0 if ok else 1
 

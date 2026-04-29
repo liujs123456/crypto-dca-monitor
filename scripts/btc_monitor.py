@@ -2,12 +2,11 @@
 """BTC dip ladder monitor — runs every 2h via GitHub Actions.
 
 Tier state is persisted in ../state/btc_state.json (committed back to repo
-by the workflow). This makes the re-arm rule actually work, and avoids
-relying on ntfy's 12h message history for state recovery.
+by the workflow). lib/state_store.py validates the file on read and recovers
+gracefully (with a notification) if it's corrupted.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -17,30 +16,10 @@ from string import Template
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib import btc_price, ladder, ntfy
+from lib import btc_price, ladder, ntfy, state_store
 
 STATE_PATH = ROOT / "state" / "btc_state.json"
-
-
-def load_state() -> dict:
-    if not STATE_PATH.exists():
-        return {
-            "tier": "GREEN",
-            "armed": ladder.default_armed(),
-            "last_price": None,
-            "last_ref": None,
-            "last_check_utc": None,
-        }
-    data = json.loads(STATE_PATH.read_text())
-    armed = ladder.default_armed()
-    armed.update({k: bool(v) for k, v in data.get("armed", {}).items()})
-    data["armed"] = armed
-    return data
-
-
-def save_state(state: dict) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+THREAD_TAG = "btc-monitor"  # ntfy iOS grouping
 
 
 def main() -> int:
@@ -48,10 +27,25 @@ def main() -> int:
     price, change_24h = btc_price.fetch_btc_price()
 
     if price is None:
-        ntfy.push("⚠️ Monitor 失败", "BTC 价格源全部不可达，跳过本次。", priority="low")
+        ntfy.push(
+            "⚠️ Monitor 失败",
+            "BTC 价格源全部不可达，跳过本次。",
+            priority="low",
+            thread=THREAD_TAG,
+        )
         return 1
 
-    state = load_state()
+    state, recovery_reason = state_store.load(STATE_PATH)
+    if recovery_reason:
+        ntfy.push(
+            "⚠️ State 文件已重置",
+            f"btc_state.json 损坏（{recovery_reason}），已重置为默认。"
+            f"\n注意：所有 tier 重新 armed，可能重新触发。",
+            priority="high",
+            tags="warning",
+            thread=THREAD_TAG,
+        )
+
     prev_tier = state.get("tier", "GREEN")
     armed = ladder.update_armed(state["armed"], price, ref)
     cur_tier = ladder.classify_state(price, ref)
@@ -66,7 +60,7 @@ def main() -> int:
             ref=f"{ref:,.0f}",
             t1=f"{prices['T1']:,.0f}",
         )
-        ntfy.push(title, body, priority=prio, tags=tags)
+        ntfy.push(title, body, priority=prio, tags=tags, thread=THREAD_TAG)
 
     if change_24h is not None and abs(change_24h) > 8:
         last_flash = state.get("last_flash_utc")
@@ -79,6 +73,7 @@ def main() -> int:
                 f"BTC 24h {change_24h}%. 现价 ${price:,.0f}.",
                 priority="default",
                 tags="zap",
+                thread=THREAD_TAG,
             )
             state["last_flash_utc"] = now_utc.isoformat()
 
@@ -87,7 +82,7 @@ def main() -> int:
     state["last_price"] = price
     state["last_ref"] = ref
     state["last_check_utc"] = datetime.now(timezone.utc).isoformat()
-    save_state(state)
+    state_store.save(STATE_PATH, state)
 
     print(
         f"BTC: ${price:,.0f} | 24h: {change_24h}% | REF: ${ref:,.0f} | "

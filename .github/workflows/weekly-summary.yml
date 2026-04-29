@@ -2,29 +2,31 @@ name: Weekly Summary
 
 on:
   schedule:
-    # Dual schedule for DST: 04:30 UTC Mon = Sun 21:30 PT in PDT, 05:30 UTC Mon = Sun 21:30 PT in PST.
-    - cron: '30 4 * * 1'
-    - cron: '30 5 * * 1'
+    - cron: '30 4 * * 1'  # Sun 21:30 PT in PDT
+    - cron: '30 5 * * 1'  # Sun 21:30 PT in PST
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass DST gate'
+        type: boolean
+        default: false
 
 permissions:
-  contents: write  # commit weekly_snapshots.json back to repo
+  contents: write
 
 jobs:
   weekly:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: DST gate (skip if PT != 21:30)
-        id: gate
-        run: |
-          if python3 -m lib.dst_gate skip-if-not 21 30; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          fi
+      - id: prelude
+        uses: ./.github/actions/cron-prelude
+        with:
+          pt-hour: '21'
+          pt-minute: '30'
+          force: ${{ inputs.force }}
 
       - name: Run weekly summary
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.prelude.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           OKX_API_KEY: ${{ secrets.OKX_API_KEY }}
@@ -34,11 +36,11 @@ jobs:
         run: python3 scripts/weekly_summary.py
 
       - name: Rebuild dashboard
-        if: steps.gate.outputs.skip != 'true'
+        if: steps.prelude.outputs.skip != 'true'
         run: python3 scripts/build_dashboard.py
 
       - name: Commit snapshot + dashboard if changed
-        if: success() && steps.gate.outputs.skip != 'true'
+        if: success() && steps.prelude.outputs.skip != 'true'
         run: |
           if [ -n "$(git status --porcelain state/ docs/)" ]; then
             git config user.name "monitor-bot"
@@ -48,16 +50,8 @@ jobs:
             git push
           fi
 
-      - name: Notify on failure
-        if: failure()
-        env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          curl -s -X POST \
-            -H "Title: 🚨 周报失败" \
-            -H "Priority: high" \
-            -H "Tags: warning" \
-            -H "Click: ${RUN_URL}" \
-            -d "Weekly summary failed. 查看 ${RUN_URL}" \
-            "https://ntfy.sh/${NTFY_TOPIC}"
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          ntfy-topic: ${{ secrets.NTFY_TOPIC }}
+          title: "🚨 周报失败"

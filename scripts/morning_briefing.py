@@ -113,7 +113,9 @@ HEADLINES:
 """
 
     body = json.dumps({
-        "model": "llama-3.1-8b-instant",
+        # llama-3.3-70b-versatile: Groq free tier, ~3s response, much better
+        # Chinese summarization quality than 8b-instant.
+        "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
         "max_tokens": 600,
@@ -149,11 +151,12 @@ def main() -> int:
     deduped_total = sum(len(items) for _, items in headlines)
     print(f"After dedup: {deduped_total} headlines")
 
-    if deduped_total == 0:
+    if deduped_total < 4:
         ntfy.push(
             f"📰 早报 {datetime.now().strftime('%m/%d')}",
-            "今日所有新闻源都获取失败。",
+            f"⚠️ 只抓到 {deduped_total} 条标题（{len([s for s,i in headlines if i])}/{len(RSS_FEEDS)} 个源工作），今日不发总结，避免低质量摘要。",
             priority="low",
+            thread="morning-briefing",
         )
         return 1
 
@@ -169,6 +172,7 @@ def main() -> int:
                 if items
             )[:1500],
             priority="low",
+            thread="morning-briefing",
         )
         return 1
 
@@ -177,6 +181,7 @@ def main() -> int:
         summary,
         priority="default",
         tags="newspaper",
+        thread="morning-briefing",
     )
     print("Sent" if ok else "Failed")
     return 0 if ok else 1
