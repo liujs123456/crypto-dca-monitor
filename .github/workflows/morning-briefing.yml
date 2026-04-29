@@ -16,6 +16,7 @@ jobs:
   briefing:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - id: prelude
         uses: ./.github/actions/cron-prelude
         with:

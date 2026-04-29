@@ -12,7 +12,7 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - uses: ./.github/actions/cron-prelude
+      - uses: actions/checkout@v4
       # No DST gate — runs on the 2h interval regardless of clock
 
       - name: Run monitor

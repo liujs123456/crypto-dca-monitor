@@ -1,5 +1,5 @@
-name: Cron prelude
-description: Standard checkout + optional DST gate. Sets steps.gate.outputs.skip=true when current PT clock is not within tolerance of the target.
+name: DST gate
+description: Optional DST gate. Sets steps.gate.outputs.skip=true when current PT clock is not within tolerance of the target. Caller MUST checkout the repo before invoking this action.
 
 inputs:
   pt-hour:
@@ -21,8 +21,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-
     - name: DST gate
       id: gate
       if: inputs.pt-hour != '' && inputs.force != 'true'
