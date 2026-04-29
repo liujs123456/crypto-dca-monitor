@@ -15,7 +15,7 @@ inputs:
 
 outputs:
   skip:
-    description: 'true' when the gate decided this run is the wrong DST window
+    description: "Set to 'true' when the gate decided this run is the wrong DST window"
     value: ${{ steps.gate.outputs.skip }}
 
 runs:
