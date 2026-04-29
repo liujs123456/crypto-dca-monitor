@@ -1,7 +1,12 @@
 {
-  "tier": "GREEN",
-  "armed": {"T1": true, "T2": true, "T3": true, "T4": true},
-  "last_price": null,
-  "last_ref": null,
-  "last_check_utc": null
+  "armed": {
+    "T1": true,
+    "T2": true,
+    "T3": true,
+    "T4": true
+  },
+  "last_check_utc": "2026-04-29T03:52:23.009429+00:00",
+  "last_price": 76961.075,
+  "last_ref": 79000.0,
+  "tier": "GREEN"
 }
