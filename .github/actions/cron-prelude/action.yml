@@ -23,7 +23,7 @@ runs:
   steps:
     - name: DST gate
       id: gate
-      if: inputs.pt-hour != '' && inputs.force != 'true'
+      if: ${{ inputs.pt-hour != '' && inputs.force != 'true' }}
       shell: bash
       run: |
         if python3 -m lib.dst_gate skip-if-not "${{ inputs.pt-hour }}" "${{ inputs.pt-minute }}"; then
