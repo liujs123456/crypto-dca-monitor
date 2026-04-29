@@ -7,6 +7,11 @@ on:
     - cron: '5 8 * * *'
     - cron: '5 9 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass DST gate (run regardless of PT clock)'
+        type: boolean
+        default: false
 
 jobs:
   update:
@@ -16,6 +21,7 @@ jobs:
 
       - name: DST gate (skip if PT != 01:05)
         id: gate
+        if: inputs.force != true
         run: |
           if python3 -m lib.dst_gate skip-if-not 1 5; then
             echo "skip=true" >> $GITHUB_OUTPUT
