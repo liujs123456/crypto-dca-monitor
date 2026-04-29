@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""Morning news briefing — fetch headlines, summarize via Groq, push to ntfy."""
+"""Morning news briefing — fetch headlines, dedupe, summarize via Groq, push to ntfy."""
+from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+import urllib.error
 import urllib.request
-import urllib.parse
 from datetime import datetime
+from difflib import SequenceMatcher
+from pathlib import Path
 from xml.etree import ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from lib import ntfy
 
 NTFY_TOPIC = os.environ["NTFY_TOPIC"]
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
-
-NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
 
 RSS_FEEDS = [
     ("CNBC Markets", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147"),
@@ -20,6 +27,8 @@ RSS_FEEDS = [
     ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
     ("Cointelegraph", "https://cointelegraph.com/rss"),
 ]
+
+DEDUP_THRESHOLD = 0.65  # similarity ratio for same-story dedup. Conservative — Groq handles fuzzy cross-source merging.
 
 
 def fetch_rss(name: str, url: str, max_items: int = 8) -> list[str]:
@@ -39,6 +48,43 @@ def fetch_rss(name: str, url: str, max_items: int = 8) -> list[str]:
     except Exception as e:
         print(f"[WARN] {name} failed: {e}", file=sys.stderr)
         return []
+
+
+def _normalize(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def dedupe_headlines(grouped: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Drop headlines too similar to one already kept (across all sources).
+
+    Keeps first occurrence (preserves source-order priority). Returns the same
+    structure with dropped items removed.
+    """
+    kept_norms: list[str] = []
+    out = []
+    dropped = 0
+    for source, items in grouped:
+        kept_for_source = []
+        for h in items:
+            n = _normalize(h)
+            if not n:
+                continue
+            is_dup = any(
+                SequenceMatcher(None, n, k).ratio() >= DEDUP_THRESHOLD
+                for k in kept_norms
+            )
+            if is_dup:
+                dropped += 1
+                continue
+            kept_norms.append(n)
+            kept_for_source.append(h)
+        out.append((source, kept_for_source))
+    if dropped:
+        print(f"Deduped {dropped} similar headlines.")
+    return out
 
 
 def call_groq(headlines: list[tuple[str, list[str]]]) -> str:
@@ -94,42 +140,20 @@ HEADLINES:
         raise
 
 
-def push_ntfy(title: str, body: str, priority: int = 3, tags: str = "newspaper") -> bool:
-    payload = json.dumps({
-        "topic": NTFY_TOPIC,
-        "title": title,
-        "message": body,
-        "priority": priority,
-        "tags": [tags],
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://ntfy.sh/",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.status == 200
-    except urllib.error.HTTPError as e:
-        body_text = e.read().decode("utf-8", errors="ignore")
-        print(f"[ERR] ntfy HTTP {e.code}: {body_text[:300]}", file=sys.stderr)
-        return False
-    except Exception as e:
-        print(f"[ERR] ntfy: {e}", file=sys.stderr)
-        return False
-
-
 def main() -> int:
     headlines = [(name, fetch_rss(name, url)) for name, url in RSS_FEEDS]
-    total = sum(len(items) for _, items in headlines)
-    print(f"Fetched {total} headlines across {len(RSS_FEEDS)} sources")
+    raw_total = sum(len(items) for _, items in headlines)
+    print(f"Fetched {raw_total} headlines across {len(RSS_FEEDS)} sources")
 
-    if total == 0:
-        push_ntfy(
+    headlines = dedupe_headlines(headlines)
+    deduped_total = sum(len(items) for _, items in headlines)
+    print(f"After dedup: {deduped_total} headlines")
+
+    if deduped_total == 0:
+        ntfy.push(
             f"📰 早报 {datetime.now().strftime('%m/%d')}",
             "今日所有新闻源都获取失败。",
-            priority=2,
+            priority="low",
         )
         return 1
 
@@ -137,21 +161,22 @@ def main() -> int:
         summary = call_groq(headlines)
     except Exception as e:
         print(f"[ERR] Groq: {e}", file=sys.stderr)
-        push_ntfy(
+        ntfy.push(
             f"📰 早报 {datetime.now().strftime('%m/%d')} (raw)",
             "\n".join(
                 f"【{src}】\n" + "\n".join(f"• {h}" for h in items[:3])
                 for src, items in headlines
                 if items
             )[:1500],
-            priority=2,
+            priority="low",
         )
         return 1
 
-    ok = push_ntfy(
+    ok = ntfy.push(
         f"📰 早报 {datetime.now().strftime('%m/%d')}",
         summary,
-        priority=3,
+        priority="default",
+        tags="newspaper",
     )
     print("Sent" if ok else "Failed")
     return 0 if ok else 1

@@ -2,16 +2,50 @@ name: BTC Dip Ladder Monitor
 
 on:
   schedule:
-    - cron: '7 */2 * * *'  # every 2h on the :07 mark UTC
+    - cron: '7 */2 * * *'  # every 2h on the :07 mark UTC (avoids :00/:03/:05 GH cron load spikes)
   workflow_dispatch:
+
+permissions:
+  contents: write  # needed to commit state/btc_state.json back to repo
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Run monitor
+        id: run
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE || '79500' }}
-        run: bash scripts/btc_monitor.sh
+        run: python3 scripts/btc_monitor.py
+
+      - name: Rebuild dashboard
+        if: success()
+        run: python3 scripts/build_dashboard.py
+
+      - name: Commit state + dashboard if changed
+        if: success()
+        run: |
+          if [ -n "$(git status --porcelain state/ docs/)" ]; then
+            git config user.name "monitor-bot"
+            git config user.email "monitor-bot@users.noreply.github.com"
+            git add state/btc_state.json docs/
+            git commit -m "state: update BTC monitor state + dashboard [skip ci]"
+            git push
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -s -X POST \
+            -H "Title: 🚨 BTC Monitor 失败" \
+            -H "Priority: max" \
+            -H "Tags: rotating_light" \
+            -H "Click: ${RUN_URL}" \
+            -d "BTC monitor workflow failed. 查看 ${RUN_URL}" \
+            "https://ntfy.sh/${NTFY_TOPIC}"

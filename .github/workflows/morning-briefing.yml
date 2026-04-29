@@ -2,9 +2,10 @@ name: Morning News Briefing
 
 on:
   schedule:
-    # 7:17 AM PDT = 14:17 UTC. Switch to 15:17 UTC when DST ends in November.
-    # Avoids :00/:03/:05 minute marks where GH Actions cron is often skipped due to global load spikes.
+    # Dual schedule for DST: 14:17 UTC = 7:17 PT in PDT, 15:17 UTC = 7:17 PT in PST.
+    # The dst_gate step filters out the wrong one based on current PT time.
     - cron: '17 14 * * *'
+    - cron: '17 15 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,8 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: DST gate (skip if PT != 07:17)
+        id: gate
+        run: |
+          if python3 -m lib.dst_gate skip-if-not 7 17; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run briefing
+        if: steps.gate.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python3 scripts/morning_briefing.py
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -s -X POST \
+            -H "Title: 🚨 早报失败" \
+            -H "Priority: high" \
+            -H "Tags: warning" \
+            -H "Click: ${RUN_URL}" \
+            -d "Morning briefing workflow failed. 查看 ${RUN_URL}" \
+            "https://ntfy.sh/${NTFY_TOPIC}"

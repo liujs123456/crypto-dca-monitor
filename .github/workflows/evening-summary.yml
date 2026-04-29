@@ -2,9 +2,9 @@ name: Evening Portfolio Summary
 
 on:
   schedule:
-    # 20:17 PT = 03:17 UTC next day (PDT). Switch to 04:17 UTC when DST ends.
-    # Avoids minute :03 where GH Actions cron is often skipped due to load spikes.
+    # Dual schedule for DST: 03:17 UTC = 20:17 PT in PDT, 04:17 UTC = 20:17 PT in PST.
     - cron: '17 3 * * *'
+    - cron: '17 4 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,10 +12,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: DST gate (skip if PT != 20:17)
+        id: gate
+        run: |
+          if python3 -m lib.dst_gate skip-if-not 20 17; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run evening summary
+        if: steps.gate.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           OKX_API_KEY: ${{ secrets.OKX_API_KEY }}
           OKX_SECRET: ${{ secrets.OKX_SECRET }}
           OKX_PASSPHRASE: ${{ secrets.OKX_PASSPHRASE }}
-        run: bash scripts/evening_summary.sh
+          BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE || '79500' }}
+        run: python3 scripts/evening_summary.py
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -s -X POST \
+            -H "Title: 🚨 晚报失败" \
+            -H "Priority: high" \
+            -H "Tags: warning" \
+            -H "Click: ${RUN_URL}" \
+            -d "Evening summary workflow failed. 查看 ${RUN_URL}" \
+            "https://ntfy.sh/${NTFY_TOPIC}"

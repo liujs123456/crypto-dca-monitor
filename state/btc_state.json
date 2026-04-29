@@ -1,0 +1,7 @@
+{
+  "tier": "GREEN",
+  "armed": {"T1": true, "T2": true, "T3": true, "T4": true},
+  "last_price": null,
+  "last_ref": null,
+  "last_check_utc": null
+}

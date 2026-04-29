@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BTC DCA Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    margin: 0; padding: 20px; max-width: 1100px; margin-inline: auto;
+  }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .subtitle { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+  .card {
+    background: #1e293b; border-radius: 12px; padding: 20px;
+    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .price-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: baseline; }
+  .price { font-size: 36px; font-weight: 700; }
+  .ref { color: #94a3b8; font-size: 14px; }
+  .state-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 6px;
+    background: #10b981; color: white; font-weight: 600; font-size: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #334155; }
+  th { color: #94a3b8; font-weight: 500; }
+  canvas { max-height: 280px; }
+  .footer { color: #64748b; font-size: 11px; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <h1>BTC DCA Dashboard</h1>
+  <div class="subtitle">Last update (UTC): None</div>
+
+  <div class="card">
+    <div class="price-row">
+      <div class="price">$0</div>
+      <div class="ref">REF (30d high): $79,500</div>
+      <div><span class="state-badge">GREEN</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Ladder Tiers</h3>
+    <table>
+      <thead><tr><th>Tier</th><th>Trigger</th><th>距当前</th><th>加仓</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>T1</td><td>$71,550</td><td>+0.0%</td><td>$100</td><td>🟢 armed</td></tr><tr><td>T2</td><td>$67,575</td><td>+0.0%</td><td>$200</td><td>🟢 armed</td></tr><tr><td>T3</td><td>$62,010</td><td>+0.0%</td><td>$400</td><td>🟢 armed</td></tr><tr><td>T4</td><td>$54,060</td><td>+0.0%</td><td>$800</td><td>🟢 armed</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Total Assets (26 weeks)</h3>
+    <canvas id="assetsChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">BTC Price vs BTC Held</h3>
+    <canvas id="btcChart"></canvas>
+  </div>
+
+  <div class="footer">crypto-dca-monitor &middot; static dashboard rebuilt on each weekly snapshot</div>
+
+<script>
+const labels = [];
+const assets = [];
+const btcPx = [];
+const btcHeld = [];
+
+const baseOpts = {
+  responsive: true,
+  plugins: { legend: { labels: { color: '#cbd5e1' } } },
+  scales: {
+    x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+    y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+  },
+};
+
+new Chart(document.getElementById('assetsChart'), {
+  type: 'line', data: { labels, datasets: [{
+    label: 'Total Assets ($)', data: assets,
+    borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,.15)', tension: 0.3, fill: true,
+  }]},
+  options: baseOpts,
+});
+
+new Chart(document.getElementById('btcChart'), {
+  type: 'line', data: { labels, datasets: [
+    { label: 'BTC Price ($)', data: btcPx, borderColor: '#fbbf24', tension: 0.3, yAxisID: 'y' },
+    { label: 'BTC Held', data: btcHeld, borderColor: '#a78bfa', tension: 0.3, yAxisID: 'y1' },
+  ]},
+  options: {
+    ...baseOpts,
+    scales: {
+      x: baseOpts.scales.x,
+      y: { position: 'left', ticks: { color: '#fbbf24' }, grid: { color: '#334155' } },
+      y1: { position: 'right', ticks: { color: '#a78bfa' }, grid: { display: false } },
+    },
+  },
+});
+</script>
+</body>
+</html>
