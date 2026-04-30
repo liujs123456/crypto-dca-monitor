@@ -82,6 +82,9 @@ def signed_get(path_and_query: str) -> dict:
             "OK-ACCESS-TIMESTAMP": ts,
             "OK-ACCESS-PASSPHRASE": passphrase,
             "Content-Type": "application/json",
+            # Cloudflare in front of OKX returns 1010 on bare urllib UA — pass a
+            # browser-like UA so the GH Actions runner IP isn't auto-banned.
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
         },
         method="GET",
     )
