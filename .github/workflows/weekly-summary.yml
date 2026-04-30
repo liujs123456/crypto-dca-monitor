@@ -22,8 +22,9 @@ jobs:
       - id: prelude
         uses: ./.github/actions/cron-prelude
         with:
-          pt-hour: '21'
-          pt-minute: '30'
+          pdt-cron: '30 4 * * 1'
+          pst-cron: '30 5 * * 1'
+          triggered-cron: ${{ github.event.schedule }}
           force: ${{ inputs.force }}
 
       - name: Run weekly summary

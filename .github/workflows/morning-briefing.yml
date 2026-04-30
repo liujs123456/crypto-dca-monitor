@@ -2,7 +2,6 @@ name: Morning News Briefing
 
 on:
   schedule:
-    # Dual schedule: cron-prelude DST gate filters whichever is the wrong window
     - cron: '17 14 * * *'  # 7:17 PT in PDT
     - cron: '17 15 * * *'  # 7:17 PT in PST
   workflow_dispatch:
@@ -20,8 +19,9 @@ jobs:
       - id: prelude
         uses: ./.github/actions/cron-prelude
         with:
-          pt-hour: '7'
-          pt-minute: '17'
+          pdt-cron: '17 14 * * *'
+          pst-cron: '17 15 * * *'
+          triggered-cron: ${{ github.event.schedule }}
           force: ${{ inputs.force }}
 
       - name: Run briefing

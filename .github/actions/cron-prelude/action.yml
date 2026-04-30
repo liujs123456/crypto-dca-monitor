@@ -1,21 +1,25 @@
 name: DST gate
-description: Optional DST gate. Sets steps.gate.outputs.skip=true when current PT clock is not within tolerance of the target. Caller MUST checkout the repo before invoking this action.
+description: Skip a workflow run when the triggering cron is for the wrong DST half of the year. Uses github.event.schedule (the literal cron that fired) instead of wall-clock time, so it's robust against GH Actions cron delay. Caller MUST checkout the repo before invoking this action.
 
 inputs:
-  pt-hour:
-    description: Target PT hour (0-23). Omit to skip DST gating.
+  pdt-cron:
+    description: The cron expression scheduled for PDT season (e.g. '17 14 * * *')
     required: false
-  pt-minute:
-    description: Target PT minute (0-59). Required if pt-hour is set.
+  pst-cron:
+    description: The cron expression scheduled for PST season (e.g. '17 15 * * *')
     required: false
+  triggered-cron:
+    description: The cron string that triggered this run (pass github.event.schedule)
+    required: false
+    default: ''
   force:
-    description: When 'true', bypasses the DST gate (so the workflow always runs).
+    description: "When 'true', bypasses the DST gate (for workflow_dispatch testing)"
     required: false
     default: 'false'
 
 outputs:
   skip:
-    description: "Set to 'true' when the gate decided this run is the wrong DST window"
+    description: "Set to 'true' when the gate decided this run is the wrong DST half"
     value: ${{ steps.gate.outputs.skip }}
 
 runs:
@@ -23,9 +27,9 @@ runs:
   steps:
     - name: DST gate
       id: gate
-      if: ${{ inputs.pt-hour != '' && inputs.force != 'true' }}
+      if: ${{ inputs.pdt-cron != '' && inputs.force != 'true' }}
       shell: bash
       run: |
-        if python3 -m lib.dst_gate skip-if-not "${{ inputs.pt-hour }}" "${{ inputs.pt-minute }}"; then
+        if python3 -m lib.dst_gate skip-wrong-slot "${{ inputs.triggered-cron }}" "${{ inputs.pdt-cron }}" "${{ inputs.pst-cron }}"; then
           echo "skip=true" >> "$GITHUB_OUTPUT"
         fi

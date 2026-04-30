@@ -19,8 +19,9 @@ jobs:
       - id: prelude
         uses: ./.github/actions/cron-prelude
         with:
-          pt-hour: '1'
-          pt-minute: '5'
+          pdt-cron: '5 8 * * *'
+          pst-cron: '5 9 * * *'
+          triggered-cron: ${{ github.event.schedule }}
           force: ${{ inputs.force }}
 
       - name: Update REF
@@ -28,7 +29,6 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE }}
-          # PAT with `variables: write` scope — GITHUB_TOKEN cannot write Variables.
           GH_TOKEN: ${{ secrets.GH_PAT_VARS || secrets.GITHUB_TOKEN }}
         run: python3 scripts/update_ref_price.py
 
