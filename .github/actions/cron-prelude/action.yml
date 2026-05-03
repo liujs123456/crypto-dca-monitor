@@ -22,11 +22,7 @@ inputs:
     required: false
     default: 'false'
   required-secrets:
-    description: |
-      Comma-separated list of secret names that must be non-empty for this workflow to do useful work.
-      Pass values via env using ${{ secrets.NAME }} interpolation in the workflow `env:` block, then
-      reference the names here. If any are unset/empty, the run is skipped (not failed) and a single
-      info message is logged.
+    description: "Comma-separated list of secret env-var names that must be non-empty (caller passes them via the step's env block). If any are unset/empty, the run is skipped (not failed) and a single info message is logged."
     required: false
     default: ''
 
@@ -54,8 +50,8 @@ runs:
       env:
         REQUIRED: ${{ inputs.required-secrets }}
       run: |
-        # Caller must have populated these env vars from `${{ secrets.NAME }}` in the workflow env block.
-        # We can't read GH secrets directly from a composite action; only their populated env values.
+        # Caller must have populated these env vars from secrets in the workflow step env block.
+        # Composite actions cannot directly read the secrets context; only env values populated by the caller.
         IFS=',' read -ra NAMES <<< "$REQUIRED"
         missing=()
         for raw in "${NAMES[@]}"; do
