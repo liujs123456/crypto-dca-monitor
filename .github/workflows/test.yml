@@ -27,6 +27,13 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dev dependencies (hypothesis for property tests)
+        run: |
+          if [ -f requirements-dev.txt ]; then
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r requirements-dev.txt
+          fi
+
       - name: Run cron-script tests (lib + scripts)
         run: |
           if [ -d tests ]; then

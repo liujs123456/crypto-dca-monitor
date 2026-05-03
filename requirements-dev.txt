@@ -1,0 +1,9 @@
+# Dev-only deps. The runtime is stdlib-only — these are just for tests.
+#
+# hypothesis: property-based tests for lib/ladder.py. The dip-ladder
+#   threshold math is the most financially consequential code in the
+#   project; example tests catch happy paths but hypothesis fuzzes
+#   thousands of (price, ref, armed) combinations to surface corner cases
+#   (off-by-one re-arm, tier ordering violations, idempotence breaks).
+
+hypothesis>=6.100,<7
