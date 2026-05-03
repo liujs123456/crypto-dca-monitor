@@ -16,9 +16,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib import ladder, ntfy, okx
+from lib import ladder, ntfy, okx, onboarding
 
 DAILY_SNAP_PATH = ROOT / "state" / "daily_snapshots.json"
+ONBOARDING_PATH = ROOT / "state" / "cold_storage_onboarding.json"
+COLD_STORAGE_THRESHOLD_USD = 10000  # surface onboarding nudge once portfolio crosses this
 KEEP_DAYS = 60  # rolling 2 months of daily snapshots
 
 
@@ -96,6 +98,15 @@ def main() -> int:
     if interest_today:
         earn_block += f"\n{interest_today}"
 
+    # Onboarding nudge: only show once total assets approach the cold-storage threshold
+    # (within 30%) or already crossed it, to avoid noise in early phase.
+    onboarding_block = ""
+    if total_assets >= COLD_STORAGE_THRESHOLD_USD * 0.7:
+        ob_state = onboarding.load(ONBOARDING_PATH)
+        if not onboarding.is_ready(ob_state):
+            ob_block = onboarding.render_progress_block(ob_state)
+            onboarding_block = f"\n{ob_block}"
+
     body = f"""💰 总资产 {fmt_money(total_assets)}
 
 BTC {fmt_money(btc_price, 0)} ({px_24h_pct:+.2f}%)
@@ -108,7 +119,7 @@ USDT 现货: {fmt_money(usdt)}
 {dca_line}
 
 {state_emoji} Ladder: {cur_state} (REF ${ref:,.0f})
-{chr(10).join(distances)}"""
+{chr(10).join(distances)}{onboarding_block}"""
 
     ok = ntfy.push(
         f"📊 晚报 {datetime.now().strftime('%m/%d')}",

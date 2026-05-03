@@ -21,11 +21,17 @@ jobs:
       - uses: actions/checkout@v4
       - id: prelude
         uses: ./.github/actions/cron-prelude
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          OKX_API_KEY: ${{ secrets.OKX_API_KEY }}
+          OKX_SECRET: ${{ secrets.OKX_SECRET }}
+          OKX_PASSPHRASE: ${{ secrets.OKX_PASSPHRASE }}
         with:
           pdt-cron: '30 4 * * 1'
           pst-cron: '30 5 * * 1'
           triggered-cron: ${{ github.event.schedule }}
           force: ${{ inputs.force }}
+          required-secrets: 'NTFY_TOPIC,OKX_API_KEY,OKX_SECRET,OKX_PASSPHRASE'
 
       - name: Run weekly summary
         if: steps.prelude.outputs.skip != 'true'

@@ -13,18 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # No DST gate — runs on the 2h interval regardless of clock
+      - id: prelude
+        uses: ./.github/actions/cron-prelude
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        with:
+          required-secrets: 'NTFY_TOPIC'
 
       - name: Run monitor
+        if: steps.prelude.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE || '79500' }}
         run: python3 scripts/btc_monitor.py
 
       - name: Rebuild dashboard
+        if: steps.prelude.outputs.skip != 'true'
         run: python3 scripts/build_dashboard.py
 
       - name: Commit state + dashboard if changed
+        if: steps.prelude.outputs.skip != 'true'
         run: |
           if [ -n "$(git status --porcelain state/ docs/)" ]; then
             git config user.name "monitor-bot"

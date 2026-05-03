@@ -1,12 +1,17 @@
-name: DST gate
-description: Skip a workflow run when the triggering cron is for the wrong DST half of the year. Uses github.event.schedule (the literal cron that fired) instead of wall-clock time, so it's robust against GH Actions cron delay. Caller MUST checkout the repo before invoking this action.
+name: Cron prelude (DST gate + secret check)
+description: |
+  Two responsibilities:
+    (1) Skip a run when the triggering cron is for the wrong DST half (uses github.event.schedule, not wall clock — robust against GH Actions cron delay).
+    (2) Skip a run when required secrets are unset (so a fresh fork or a secrets-less public repo doesn't spam failure notifications).
+
+  Caller MUST checkout the repo before invoking this action. Sets steps.<id>.outputs.skip=true if either gate decides to skip.
 
 inputs:
   pdt-cron:
-    description: The cron expression scheduled for PDT season (e.g. '17 14 * * *')
+    description: The cron expression scheduled for PDT season (e.g. '17 14 * * *'). Omit to disable DST gating.
     required: false
   pst-cron:
-    description: The cron expression scheduled for PST season (e.g. '17 15 * * *')
+    description: The cron expression scheduled for PST season (e.g. '17 15 * * *'). Required if pdt-cron is set.
     required: false
   triggered-cron:
     description: The cron string that triggered this run (pass github.event.schedule)
@@ -16,20 +21,63 @@ inputs:
     description: "When 'true', bypasses the DST gate (for workflow_dispatch testing)"
     required: false
     default: 'false'
+  required-secrets:
+    description: |
+      Comma-separated list of secret names that must be non-empty for this workflow to do useful work.
+      Pass values via env using ${{ secrets.NAME }} interpolation in the workflow `env:` block, then
+      reference the names here. If any are unset/empty, the run is skipped (not failed) and a single
+      info message is logged.
+    required: false
+    default: ''
 
 outputs:
   skip:
-    description: "Set to 'true' when the gate decided this run is the wrong DST half"
-    value: ${{ steps.gate.outputs.skip }}
+    description: "Set to 'true' when either the DST gate or the required-secrets check decided to skip"
+    value: ${{ steps.merge.outputs.skip }}
 
 runs:
   using: composite
   steps:
     - name: DST gate
-      id: gate
+      id: dst
       if: ${{ inputs.pdt-cron != '' && inputs.force != 'true' }}
       shell: bash
       run: |
         if python3 -m lib.dst_gate skip-wrong-slot "${{ inputs.triggered-cron }}" "${{ inputs.pdt-cron }}" "${{ inputs.pst-cron }}"; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Required-secret check
+      id: secrets
+      if: ${{ inputs.required-secrets != '' && steps.dst.outputs.skip != 'true' }}
+      shell: bash
+      env:
+        REQUIRED: ${{ inputs.required-secrets }}
+      run: |
+        # Caller must have populated these env vars from `${{ secrets.NAME }}` in the workflow env block.
+        # We can't read GH secrets directly from a composite action; only their populated env values.
+        IFS=',' read -ra NAMES <<< "$REQUIRED"
+        missing=()
+        for raw in "${NAMES[@]}"; do
+          name="$(echo "$raw" | xargs)"  # trim whitespace
+          [ -z "$name" ] && continue
+          # Indirect lookup: read the env var named $name
+          value="${!name:-}"
+          if [ -z "$value" ]; then
+            missing+=("$name")
+          fi
+        done
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "::notice title=Skipping run::Required secrets unset: ${missing[*]}. Set them in repo Settings → Secrets and variables → Actions, or fork-test with workflow_dispatch."
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "All required secrets present."
+        fi
+
+    - name: Merge skip signals
+      id: merge
+      shell: bash
+      run: |
+        if [ "${{ steps.dst.outputs.skip }}" = "true" ] || [ "${{ steps.secrets.outputs.skip }}" = "true" ]; then
           echo "skip=true" >> "$GITHUB_OUTPUT"
         fi

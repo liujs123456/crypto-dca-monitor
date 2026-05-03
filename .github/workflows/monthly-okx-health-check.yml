@@ -1,9 +1,10 @@
-name: Update BTC REF Price (30d high)
+name: Monthly OKX Health Check
 
 on:
   schedule:
-    - cron: '5 8 * * *'  # 1:05 PT in PDT
-    - cron: '5 9 * * *'  # 1:05 PT in PST
+    # Day 1 of every month at 09:13 PT
+    - cron: '13 16 1 * *'  # 09:13 PT in PDT (March-Nov)
+    - cron: '13 17 1 * *'  # 09:13 PT in PST (Nov-March)
   workflow_dispatch:
     inputs:
       force:
@@ -12,7 +13,7 @@ on:
         default: false
 
 jobs:
-  update:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,24 +21,21 @@ jobs:
         uses: ./.github/actions/cron-prelude
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          GH_PAT_VARS: ${{ secrets.GH_PAT_VARS }}
         with:
-          pdt-cron: '5 8 * * *'
-          pst-cron: '5 9 * * *'
+          pdt-cron: '13 16 1 * *'
+          pst-cron: '13 17 1 * *'
           triggered-cron: ${{ github.event.schedule }}
           force: ${{ inputs.force }}
-          required-secrets: 'NTFY_TOPIC,GH_PAT_VARS'
+          required-secrets: 'NTFY_TOPIC'
 
-      - name: Update REF
+      - name: Run OKX health check
         if: steps.prelude.outputs.skip != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          BTC_REF_PRICE: ${{ vars.BTC_REF_PRICE }}
-          GH_TOKEN: ${{ secrets.GH_PAT_VARS || secrets.GITHUB_TOKEN }}
-        run: python3 scripts/update_ref_price.py
+        run: python3 scripts/monthly_okx_health.py
 
       - if: failure()
         uses: ./.github/actions/notify-failure
         with:
           ntfy-topic: ${{ secrets.NTFY_TOPIC }}
-          title: "🚨 REF 自动更新失败"
+          title: "🚨 OKX 月度健康检查失败"
