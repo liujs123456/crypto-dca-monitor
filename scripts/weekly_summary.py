@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib import ladder, ntfy, okx
+from lib import klinekit, ladder, ntfy, okx
 
 SNAP_PATH = ROOT / "state" / "weekly_snapshots.json"
 
@@ -112,6 +112,10 @@ USDT 现货 {fmt_money(usdt)} | Earn {fmt_money(earn_amt)} (+{fmt_money(earn_int
 {delta_block}
 
 {state_emoji} Ladder: {cur_state} (REF ${ref:,.0f})"""
+
+    bt = klinekit.run_dip_ladder_backtest(days=365)
+    if bt:
+        body += f"\n\n📊 dip-ladder 365d: {bt['line']}"
 
     ok = ntfy.push(
         f"📅 周报 {datetime.now().strftime('%m/%d')}",
