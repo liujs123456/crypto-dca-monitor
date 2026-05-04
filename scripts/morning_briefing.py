@@ -16,7 +16,7 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib import ntfy
+from lib import klinekit, ntfy
 
 NTFY_TOPIC = os.environ["NTFY_TOPIC"]
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
@@ -176,9 +176,14 @@ def main() -> int:
         )
         return 1
 
+    body = summary
+    bt = klinekit.run_dip_ladder_backtest(days=30)
+    if bt:
+        body = body.rstrip() + f"\n\n📊 dip-ladder 30d: {bt['line']}"
+
     ok = ntfy.push(
         f"📰 早报 {datetime.now().strftime('%m/%d')}",
-        summary,
+        body,
         priority="default",
         tags="newspaper",
         thread="morning-briefing",
