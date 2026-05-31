@@ -86,10 +86,12 @@ def decide_notification(
 
 
 NOTIFICATION_TEMPLATES = {
-    "WATCH":   ("🟡 WATCH: BTC 接近 Tier 1", "low",     "eyes",                          "BTC ${price} (ref ${ref}). 接近 Tier 1 (${t1})."),
-    "T1":      ("🟠 T1 触发",                "high",    "chart_with_downwards_trend",    "BTC ${price}. Tier 1 触发. 加 $100. 开 Claude 确认."),
-    "T2":      ("🟠 T2 触发",                "high",    "chart_with_downwards_trend",    "BTC ${price}. Tier 2 触发. 加 $200. 开 Claude 确认."),
-    "T3":      ("🔴 T3: 深度修正",           "high",    "rotating_light",                "BTC ${price}. Tier 3 触发. 加 $400. 尽快开 Claude."),
-    "T4":      ("🚨 T4: CAPITULATION",       "max",     "rotating_light,fire",           "🚨 BTC ${price}. Tier 4 触发. 加 $800."),
-    "RECOVERED": ("✅ RECOVERED",            "low",     "white_check_mark",              "BTC 回到 ${price}. 已从触发恢复."),
+    # Note: literal $ MUST be escaped as $$ in template strings (Python string.Template syntax).
+    # Otherwise Template.substitute() raises ValueError on "$100", "$200", etc.
+    "WATCH":   ("🟡 WATCH: BTC 接近 Tier 1", "low",     "eyes",                          "BTC $$${price} (ref $$${ref}). 接近 Tier 1 ($$${t1})."),
+    "T1":      ("🟠 T1 触发",                "high",    "chart_with_downwards_trend",    "BTC $$${price}. Tier 1 触发. 加 $$100. 开 Claude 确认."),
+    "T2":      ("🟠 T2 触发",                "high",    "chart_with_downwards_trend",    "BTC $$${price}. Tier 2 触发. 加 $$200. 开 Claude 确认."),
+    "T3":      ("🔴 T3: 深度修正",           "high",    "rotating_light",                "BTC $$${price}. Tier 3 触发. 加 $$400. 尽快开 Claude."),
+    "T4":      ("🚨 T4: CAPITULATION",       "max",     "rotating_light,fire",           "🚨 BTC $$${price}. Tier 4 触发. 加 $$800."),
+    "RECOVERED": ("✅ RECOVERED",            "low",     "white_check_mark",              "BTC 回到 $$${price}. 已从触发恢复."),
 }
